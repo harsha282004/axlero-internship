@@ -1,0 +1,13 @@
+split_type,split,label,count
+original,train,NORMAL,1341
+original,train,PNEUMONIA,3875
+original,val,NORMAL,8
+original,val,PNEUMONIA,8
+original,test,NORMAL,234
+original,test,PNEUMONIA,390
+proposed,train,NORMAL,1109
+proposed,train,PNEUMONIA,2991
+proposed,val,NORMAL,237
+proposed,val,PNEUMONIA,641
+proposed,test,NORMAL,237
+proposed,test,PNEUMONIA,641
