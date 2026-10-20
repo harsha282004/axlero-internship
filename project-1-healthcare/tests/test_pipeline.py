@@ -16,7 +16,8 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src import evaluate, train  # noqa: E402
-from src.dataset import build_transforms, load_split, make_loader, read_manifest  # noqa: E402
+from src.dataset import (IMAGE_SIZE, MEAN, STD, LetterboxSquare, build_transforms, load_split,  # noqa: E402
+                         make_loader, read_manifest)
 from src.metrics import compute_metrics, select_threshold  # noqa: E402
 from src.models import build_model  # noqa: E402
 from src.utils import close_logging  # noqa: E402
@@ -131,6 +132,82 @@ class ModelTests(unittest.TestCase):
     def test_pretrained_not_allowed_for_baseline(self):
         with self.assertRaises(ValueError):
             build_model("baseline", pretrained=True)
+
+
+class PreprocessModeTests(unittest.TestCase):
+    @staticmethod
+    def img(mode, w, h, value=128):
+        arr = np.full((h, w, 3) if mode == "RGB" else (h, w), value, dtype=np.uint8)
+        return Image.fromarray(arr)
+
+    def test_shapes_for_grayscale_and_rgb_in_both_modes(self):
+        for preprocess in ("resize", "pad"):
+            t = build_transforms(train=False, preprocess=preprocess)
+            for mode in ("L", "RGB"):
+                for w, h in ((300, 100), (100, 300), (224, 224), (1654, 1323)):
+                    self.assertEqual(tuple(t(self.img(mode, w, h)).shape), (3, 224, 224), (preprocess, mode, w, h))
+
+    def test_default_is_resize_and_unknown_mode_rejected(self):
+        im = self.img("L", 300, 100)
+        self.assertTrue(torch.equal(build_transforms(False)(im), build_transforms(False, "resize")(im)))
+        with self.assertRaises(ValueError):
+            build_transforms(False, "crop")
+
+    def test_letterbox_keeps_aspect_and_pads_centred_black(self):
+        out = LetterboxSquare()(self.img("L", 400, 100, value=200))
+        self.assertEqual(out.size, (IMAGE_SIZE, IMAGE_SIZE))
+        a = np.array(out)
+        rows = np.flatnonzero(a.max(axis=1) > 0)
+        self.assertEqual((rows.min(), rows.max()), (84, 139))  # 224x56 image centred vertically
+        self.assertEqual(int(a[:84].max()), 0)
+        self.assertEqual(int(a[140:].max()), 0)
+
+    def test_same_normalisation_in_both_modes(self):
+        im = self.img("L", 400, 100, value=128)
+        resized = build_transforms(False, "resize")(im)
+        padded = build_transforms(False, "pad")(im)
+        expected_pixel = resized[:, 0, 0]  # constant image -> constant tensor
+        self.assertTrue(torch.allclose(padded[:, 112, 112], expected_pixel, atol=1e-5))  # image region
+        black = torch.tensor([(0 - m) / s for m, s in zip(MEAN, STD)])
+        self.assertTrue(torch.allclose(padded[:, 0, 0], black, atol=1e-5))  # padding = normalised black
+
+    def test_rgb_converted_like_grayscale(self):
+        a = build_transforms(False, "pad")(self.img("RGB", 300, 100, value=90))
+        b = build_transforms(False, "pad")(self.img("L", 300, 100, value=90))
+        self.assertTrue(torch.allclose(a, b, atol=0.02))
+        raw = a * torch.tensor(STD).view(3, 1, 1) + torch.tensor(MEAN).view(3, 1, 1)  # undo normalisation
+        self.assertTrue(torch.allclose(raw[0], raw[1], atol=1e-5))  # three identical grayscale channels
+        self.assertTrue(torch.allclose(raw[0], raw[2], atol=1e-5))
+
+    def test_validation_deterministic_and_training_stochastic(self):
+        rng = np.random.RandomState(3)
+        im = Image.fromarray(rng.randint(0, 255, (120, 300), dtype=np.uint8))
+        for preprocess in ("resize", "pad"):
+            ev = build_transforms(False, preprocess)
+            self.assertTrue(torch.equal(ev(im), ev(im)))
+            tr = build_transforms(True, preprocess)
+            torch.manual_seed(0)
+            first = tr(im)
+            self.assertFalse(torch.equal(first, tr(im)))  # augmentation draws new randomness
+            torch.manual_seed(0)
+            self.assertTrue(torch.equal(first, tr(im)))  # ...but is reproducible from the seed
+
+    def test_train_and_evaluate_with_pad_records_preprocess(self):
+        tmp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp_dir.cleanup)
+        self.addCleanup(close_logging)
+        tmp = tmp_dir.name
+        manifest = make_dummy_dataset(tmp)
+        run_dir = train.main(["--data-root", tmp, "--manifest", str(manifest), "--preprocess", "pad",
+                              "--epochs", "1", "--batch-size", "4", "--num-workers", "0", "--device", "cpu",
+                              "--output-dir", str(Path(tmp) / "out"), "--run-name", "pad"])
+        ckpt = torch.load(run_dir / "best.pt", map_location="cpu", weights_only=True)
+        self.assertEqual(ckpt["model"]["preprocess"], "pad")
+        self.assertEqual(json.loads((run_dir / "config.json").read_text())["preprocess"], "pad")
+        m = evaluate.main(["--checkpoint", str(run_dir / "best.pt"), "--data-root", tmp, "--manifest",
+                           str(manifest), "--split", "val", "--batch-size", "4", "--num-workers", "0",
+                           "--device", "cpu"])
+        self.assertEqual(m["n"], 8)
 
 
 class EndToEndSmokeTest(unittest.TestCase):

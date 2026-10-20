@@ -91,7 +91,9 @@ def main(argv=None):
     pin = device.type == "cuda"
 
     model, ckpt = load_model(ckpt_path, device)
-    log.info("Loaded %s from %s (epoch %s)", ckpt["model"]["name"], ckpt_path, ckpt.get("epoch"))
+    preprocess = ckpt["model"].get("preprocess", "resize")  # old checkpoints predate this option
+    log.info("Loaded %s from %s (epoch %s, preprocess=%s)", ckpt["model"]["name"], ckpt_path,
+             ckpt.get("epoch"), preprocess)
 
     # Threshold source: explicit override > re-selection on val > saved threshold.json (from val).
     if args.threshold is not None:
@@ -100,7 +102,7 @@ def main(argv=None):
             log.warning("Using a manual threshold on the test split; make sure it was not tuned on test data.")
     elif args.threshold_from_val:
         vloader, _ = make_loader(args.manifest, data_root, "val", args.batch_size, args.num_workers,
-                                 args.seed, train=False, pin_memory=pin)
+                                 args.seed, train=False, pin_memory=pin, preprocess=preprocess)
         vp, vt, _ = predict(model, vloader, device, amp, desc="val (threshold)")
         threshold, _ = select_threshold(vt, vp, args.threshold_from_val, args.target_sensitivity)
         source = f"re-selected on val ({args.threshold_from_val})"
@@ -113,7 +115,7 @@ def main(argv=None):
     log.info("Decision threshold = %.4f [%s]", threshold, source)
 
     loader, frame = make_loader(args.manifest, data_root, args.split, args.batch_size, args.num_workers,
-                                args.seed, train=False, pin_memory=pin)
+                                args.seed, train=False, pin_memory=pin, preprocess=preprocess)
     n0, n1 = class_counts(frame)
     log.info("Evaluating split=%s: %d images (NORMAL=%d, PNEUMONIA=%d)", args.split, len(frame), n0, n1)
     probs, targets, _ = predict(model, loader, device, amp, desc=f"{args.split}")

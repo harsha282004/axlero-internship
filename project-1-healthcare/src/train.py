@@ -19,7 +19,7 @@ import torch
 from torch import nn
 from tqdm import tqdm
 
-from src.dataset import class_counts, make_loader
+from src.dataset import PREPROCESS_MODES, class_counts, make_loader
 from src.metrics import THRESHOLD_STRATEGIES, compute_metrics, select_threshold
 from src.models import MODEL_NAMES, build_model, count_parameters, set_train_mode
 from src.utils import (DEFAULT_MANIFEST, DEFAULT_OUTPUT_ROOT, get_device, resolve_data_root,
@@ -40,6 +40,8 @@ def parse_args(argv=None):
     p.add_argument("--pretrained", action="store_true",
                    help="densenet121 only: load ImageNet weights. DOWNLOADS them if not cached; off by default")
     p.add_argument("--freeze-backbone", action="store_true", help="densenet121 only: train the head only")
+    p.add_argument("--preprocess", choices=PREPROCESS_MODES, default="resize",
+                   help="resize: squash to 224x224 (default); pad: aspect-preserving resize + centred padding")
     p.add_argument("--epochs", type=int, default=10)
     p.add_argument("--batch-size", type=int, default=32)
     p.add_argument("--lr", type=float, default=1e-3, help="use ~1e-4 for pretrained densenet121")
@@ -121,15 +123,17 @@ def main(argv=None):
     device = get_device(args.device)
     amp = device.type == "cuda" and not args.no_amp
     data_root = resolve_data_root(args.data_root)
-    log.info("run_dir=%s device=%s amp=%s", run_dir, device, amp)
+    log.info("run_dir=%s device=%s amp=%s preprocess=%s", run_dir, device, amp, args.preprocess)
     if device.type == "cuda":
         log.info("GPU: %s", torch.cuda.get_device_name(0))
 
     pin = device.type == "cuda"
     train_loader, train_df = make_loader(args.manifest, data_root, "train", args.batch_size,
-                                         args.num_workers, args.seed, train=True, pin_memory=pin)
+                                         args.num_workers, args.seed, train=True, pin_memory=pin,
+                                         preprocess=args.preprocess)
     val_loader, val_df = make_loader(args.manifest, data_root, "val", args.batch_size,
-                                     args.num_workers, args.seed, train=False, pin_memory=pin)
+                                     args.num_workers, args.seed, train=False, pin_memory=pin,
+                                     preprocess=args.preprocess)
     for name, df in (("train", train_df), ("val", val_df)):
         n0, n1 = class_counts(df)
         log.info("%s: %d images (NORMAL=%d, PNEUMONIA=%d)", name, len(df), n0, n1)
@@ -156,7 +160,7 @@ def main(argv=None):
     save_json(config, run_dir / "config.json")
 
     history, best_score, best_epoch, bad_epochs = [], -math.inf, 0, 0
-    ckpt_meta = {"name": args.model, "dropout": args.dropout}
+    ckpt_meta = {"name": args.model, "dropout": args.dropout, "preprocess": args.preprocess}
     for epoch in range(1, args.epochs + 1):
         t0 = time.time()
         train_loss = train_one_epoch(model, train_loader, criterion, optimizer, scaler, device, amp,

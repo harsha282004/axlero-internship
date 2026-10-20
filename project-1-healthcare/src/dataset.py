@@ -11,6 +11,7 @@ import torch
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
+from torchvision.transforms import functional as TF
 
 from src.utils import LABEL_TO_INDEX, SPLITS, seed_worker
 
@@ -24,10 +25,38 @@ REQUIRED_COLUMNS = ["path", "label", "split", "patient_id"]
 MAX_LISTED = 10
 
 
-def build_transforms(train):
-    """Training: light augmentation. Eval: deterministic resize + normalise only."""
+PREPROCESS_MODES = ("resize", "pad")
+
+
+class LetterboxSquare:
+    """Aspect-preserving resize (longer side -> size) then centred constant padding to size x size.
+
+    Deterministic. Note: the amount of padding still reflects the original aspect ratio.
+    """
+
+    def __init__(self, size=IMAGE_SIZE, fill=0):
+        self.size, self.fill = size, fill
+
+    def __call__(self, img):
+        w, h = img.size
+        scale = self.size / max(w, h)
+        nw, nh = max(1, round(w * scale)), max(1, round(h * scale))
+        img = TF.resize(img, [nh, nw])  # same interpolation/antialiasing as transforms.Resize
+        canvas = Image.new(img.mode, (self.size, self.size), (self.fill,) * len(img.getbands()))
+        canvas.paste(img, ((self.size - nw) // 2, (self.size - nh) // 2))
+        return canvas
+
+
+def build_transforms(train, preprocess="resize"):
+    """Training: light augmentation. Eval: deterministic resize + normalise only.
+
+    preprocess: "resize" (default, squash to 224x224) or "pad" (aspect-preserving + padding).
+    """
+    if preprocess not in PREPROCESS_MODES:
+        raise ValueError(f"Unknown preprocess {preprocess!r}; choose from {PREPROCESS_MODES}")
+    fit = transforms.Resize((IMAGE_SIZE, IMAGE_SIZE)) if preprocess == "resize" else LetterboxSquare()
     head = [transforms.Grayscale(num_output_channels=3),  # also normalises the RGB files
-            transforms.Resize((IMAGE_SIZE, IMAGE_SIZE))]
+            fit]
     tail = [transforms.ToTensor(), transforms.Normalize(MEAN, STD)]
     if not train:
         return transforms.Compose(head + tail)
@@ -121,12 +150,12 @@ class ChestXrayDataset(Dataset):
 
 
 def make_loader(manifest_path, data_root, split, batch_size, num_workers=2, seed=42,
-                train=None, pin_memory=False):
+                train=None, pin_memory=False, preprocess="resize"):
     """DataLoader for one split. `train` defaults to (split == 'train') and controls
     shuffling and augmentation. Returns (loader, frame)."""
     train = (split == "train") if train is None else train
     frame = load_split(manifest_path, data_root, split)
-    ds = ChestXrayDataset(frame, build_transforms(train))
+    ds = ChestXrayDataset(frame, build_transforms(train, preprocess))
     gen = torch.Generator()
     gen.manual_seed(seed)
     loader = DataLoader(ds, batch_size=batch_size, shuffle=train, num_workers=num_workers,
