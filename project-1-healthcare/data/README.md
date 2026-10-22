@@ -10,7 +10,7 @@
   Kaggle licence field reads "Other (specified in description)".
 - **Attribution:** Data: Kermany et al., Cell 2018, CC BY 4.0.
 - **Task:** binary classification, NORMAL vs PNEUMONIA
-- **Label mapping used by the team:** NORMAL=0, PNEUMONIA=1
+- **“Proposed label mapping”:** NORMAL=0, PNEUMONIA=1
 
 ## Label provenance (from the source description)
 Chest X-rays (anterior-posterior) of pediatric patients aged 1-5 from Guangzhou
