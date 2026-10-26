@@ -19,7 +19,9 @@ import torch
 from torch import nn
 from tqdm import tqdm
 
-from src.dataset import PREPROCESS_MODES, class_counts, make_loader
+from src.dataset import (EDGE_AUG_FILL_CHOICES, EDGE_AUG_GREY_FILL, EDGE_AUG_MAX_FRAC, EDGE_AUG_MODES,
+                         EDGE_AUG_OPS, EDGE_AUG_PROB, PAD_AUG_GREY_RANGE, PAD_AUG_KEEP_STANDARD_PROB,
+                         PAD_AUG_MODES, PREPROCESS_MODES, class_counts, make_loader)
 from src.metrics import THRESHOLD_STRATEGIES, compute_metrics, select_threshold
 from src.models import MODEL_NAMES, build_model, count_parameters, set_train_mode
 from src.utils import (DEFAULT_MANIFEST, DEFAULT_OUTPUT_ROOT, get_device, resolve_data_root,
@@ -42,6 +44,25 @@ def parse_args(argv=None):
     p.add_argument("--freeze-backbone", action="store_true", help="densenet121 only: train the head only")
     p.add_argument("--preprocess", choices=PREPROCESS_MODES, default="resize",
                    help="resize: squash to 224x224 (default); pad: aspect-preserving resize + centred padding")
+    p.add_argument("--pad-aug", choices=PAD_AUG_MODES, default="none",
+                   help="TRAINING-only randomised padding (requires --preprocess pad). none = unchanged pipeline. "
+                        "random: 50%% standard centred black; else fill in {black, image mean, random grey} "
+                        "(equal prob.) and a random offset along the padded axis")
+    p.add_argument("--pad-grey-range", type=int, nargs=2, metavar=("LO", "HI"), default=list(PAD_AUG_GREY_RANGE),
+                   help="inclusive integer range for the random grey fill (default 64 192)")
+    p.add_argument("--edge-aug", choices=EDGE_AUG_MODES, default="none",
+                   help="TRAINING-only randomised edge crop/mask, independent of --pad-aug and of "
+                        "--preprocess. none = unchanged pipeline (default). random: with probability "
+                        "--edge-aug-prob, crop or mask (equal prob.) an outer border of width sampled "
+                        "uniformly from 0 to --edge-max-frac of the shorter image side, filled with "
+                        "black, a fixed grey, or this image's mean intensity (equal prob.)")
+    p.add_argument("--edge-aug-prob", type=float, default=EDGE_AUG_PROB,
+                   help="probability a training image receives an edge crop/mask at all (default 0.3)")
+    p.add_argument("--edge-max-frac", type=float, default=EDGE_AUG_MAX_FRAC,
+                   help="maximum edge crop/mask width as a fraction of min(width, height); must be in "
+                        "[0, 0.10] (default 0.10)")
+    p.add_argument("--edge-grey-fill", type=int, default=EDGE_AUG_GREY_FILL,
+                   help="fixed grey fill value for edge masking, in [0, 255] (default 128)")
     p.add_argument("--epochs", type=int, default=10)
     p.add_argument("--batch-size", type=int, default=32)
     p.add_argument("--lr", type=float, default=1e-3, help="use ~1e-4 for pretrained densenet121")
@@ -111,6 +132,12 @@ def selection_score(name, val_metrics, val_loss):
 
 def main(argv=None):
     args = parse_args(argv)
+    if not (0.0 <= args.edge_aug_prob <= 1.0):
+        raise ValueError(f"--edge-aug-prob must be in [0, 1], got {args.edge_aug_prob}")
+    if not (0.0 <= args.edge_max_frac <= 0.10):
+        raise ValueError(f"--edge-max-frac must be in [0, 0.10], got {args.edge_max_frac}")
+    if not (0 <= args.edge_grey_fill <= 255):
+        raise ValueError(f"--edge-grey-fill must be in [0, 255], got {args.edge_grey_fill}")
     run_name = args.run_name or f"{args.model}_{datetime.now():%Y%m%d-%H%M%S}"
     run_dir = Path(args.output_dir) / run_name
     if (run_dir / "best.pt").exists():
@@ -123,14 +150,18 @@ def main(argv=None):
     device = get_device(args.device)
     amp = device.type == "cuda" and not args.no_amp
     data_root = resolve_data_root(args.data_root)
-    log.info("run_dir=%s device=%s amp=%s preprocess=%s", run_dir, device, amp, args.preprocess)
+    log.info("run_dir=%s device=%s amp=%s preprocess=%s pad_aug=%s edge_aug=%s", run_dir, device, amp,
+             args.preprocess, args.pad_aug, args.edge_aug)
     if device.type == "cuda":
         log.info("GPU: %s", torch.cuda.get_device_name(0))
 
     pin = device.type == "cuda"
     train_loader, train_df = make_loader(args.manifest, data_root, "train", args.batch_size,
                                          args.num_workers, args.seed, train=True, pin_memory=pin,
-                                         preprocess=args.preprocess)
+                                         preprocess=args.preprocess, pad_aug=args.pad_aug,
+                                         pad_grey_range=tuple(args.pad_grey_range), edge_aug=args.edge_aug,
+                                         edge_aug_prob=args.edge_aug_prob, edge_max_frac=args.edge_max_frac,
+                                         edge_grey_fill=args.edge_grey_fill)
     val_loader, val_df = make_loader(args.manifest, data_root, "val", args.batch_size,
                                      args.num_workers, args.seed, train=False, pin_memory=pin,
                                      preprocess=args.preprocess)
@@ -160,7 +191,15 @@ def main(argv=None):
     save_json(config, run_dir / "config.json")
 
     history, best_score, best_epoch, bad_epochs = [], -math.inf, 0, 0
-    ckpt_meta = {"name": args.model, "dropout": args.dropout, "preprocess": args.preprocess}
+    pad_aug_meta = {"mode": args.pad_aug, "keep_standard_prob": PAD_AUG_KEEP_STANDARD_PROB,
+                    "fill_choices": ["black0", "image_mean", "random_grey"], "grey_range": list(args.pad_grey_range),
+                    "random_offset": True, "applied_to": "train_only"}
+    edge_aug_meta = {"mode": args.edge_aug, "prob": args.edge_aug_prob, "max_frac": args.edge_max_frac,
+                     "ops": list(EDGE_AUG_OPS), "fill_choices": list(EDGE_AUG_FILL_CHOICES),
+                     "grey_fill": args.edge_grey_fill, "applied_to": "train_only",
+                     "independent_of": "pad_aug"}
+    ckpt_meta = {"name": args.model, "dropout": args.dropout, "preprocess": args.preprocess,
+                 "pad_aug": pad_aug_meta, "edge_aug": edge_aug_meta}
     for epoch in range(1, args.epochs + 1):
         t0 = time.time()
         train_loss = train_one_epoch(model, train_loader, criterion, optimizer, scaler, device, amp,

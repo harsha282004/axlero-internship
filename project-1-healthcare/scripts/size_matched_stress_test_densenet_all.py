@@ -36,8 +36,8 @@ from src.train import predict
 from src.utils import (DEFAULT_MANIFEST, DEFAULT_OUTPUT_ROOT, get_device, load_json, resolve_data_root,
                        save_json, set_seed)
 
-DENSE_RUNS = {"densenet_s42": "densenet121_pad_seed42", "densenet_s43": "densenet121_pad_seed43",
-              "densenet_s44": "densenet121_pad_seed44"}
+DEFAULT_RUN_TEMPLATE = "densenet121_pad_seed{seed}"
+DENSE_RUNS = {f"densenet_s{s}": DEFAULT_RUN_TEMPLATE.format(seed=s) for s in (42, 43, 44)}
 BASE_RUNS = {"pad_s42": "baseline_aspect_20ep", "resize_s42": "baseline_resize_20ep",
              "pad_s43": "baseline_pad_seed43", "resize_s43": "baseline_resize_seed43",
              "pad_s44": "baseline_pad_seed44", "resize_s44": "baseline_resize_seed44"}
@@ -85,11 +85,22 @@ def main(argv=None):
     p.add_argument("--seed", type=int, default=42, help="matching/bootstrap seed (same as the six-run audit)")
     p.add_argument("--batch-size", type=int, default=32)
     p.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
+    p.add_argument("--run-template", default=DEFAULT_RUN_TEMPLATE,
+                   help="DenseNet run folder name with {seed}; default = the original DenseNet runs. For other runs "
+                        "a different --output-dir is required")
     args = p.parse_args(argv)
+    if args.run_template != DEFAULT_RUN_TEMPLATE:
+        if Path(args.output_dir) == DEFAULT_OUTPUT_ROOT / "size_matched_stress_test_densenet_all":
+            sys.exit("ERROR: --run-template differs from the default; pass a new --output-dir so the existing "
+                     "audit outputs are not overwritten")
+        DENSE_RUNS.clear()
+        DENSE_RUNS.update({f"densenet_s{s}": args.run_template.format(seed=s) for s in (42, 43, 44)})
 
+    out = Path(args.output_dir)
+    if out.exists() and any(out.iterdir()):
+        sys.exit(f"ERROR: {out} already contains results; refusing to overwrite")
     set_seed(args.seed)
     root = resolve_data_root(args.data_root)
-    out = Path(args.output_dir)
     out.mkdir(parents=True, exist_ok=True)
     device = get_device(args.device)
     allm.MODE_COLOR["densenet"] = GROUP_COLOR["densenet121"]  # runtime-only; no source file is edited

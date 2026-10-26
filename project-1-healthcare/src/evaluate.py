@@ -81,6 +81,9 @@ def main(argv=None):
         raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
     run_dir = ckpt_path.parent
     out_dir = Path(args.output_dir) if args.output_dir else run_dir / f"eval_{args.split}"
+    if out_dir.exists() and any(out_dir.iterdir()):
+        raise FileExistsError(f"{out_dir} already contains results; pass --output-dir to choose a new "
+                              "destination instead of overwriting them")
     out_dir.mkdir(parents=True, exist_ok=True)
     setup_logging(out_dir / "evaluate.log")
     log.info("Educational project: results are NOT clinically validated.")
