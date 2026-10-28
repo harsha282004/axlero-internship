@@ -21,3 +21,7 @@ torch>=2.5,<3
 torchvision>=0.20,<1
 scikit-learn>=1.4,<2   # ROC-AUC, confusion matrix, precision/recall/F1
 tqdm>=4.66,<5          # training progress bars
+
+# Interactive results dashboard (dashboard.py; read-only over runs/, no training)
+streamlit>=1.38,<2
+plotly>=5.24,<6        # dashboard charts; dashboard falls back to matplotlib if absent
