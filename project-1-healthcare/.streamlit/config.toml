@@ -1,0 +1,12 @@
+# Light theme for dashboard.py. Using Streamlit's own theme engine (not CSS overrides)
+# so colors apply consistently to every built-in widget, chart container, and the sidebar.
+[theme]
+base = "light"
+primaryColor = "#2563eb"          # light blue accent
+backgroundColor = "#ffffff"        # page background: white
+secondaryBackgroundColor = "#f3f6fb"  # sidebar / widget background: very light grey-blue
+textColor = "#0f1b2d"              # dark navy text
+font = "sans serif"
+
+[server]
+headless = true
