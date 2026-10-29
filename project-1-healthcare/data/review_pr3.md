@@ -16,13 +16,20 @@ Reviewer: Sri Chidvilas Govindarajula (dataset owner). Date: 2026-10-28.
 - Per-class precision, recall, F1 and a confusion matrix are reported.
 - No dataset images, zips or model weights are committed.
 
-## To confirm
-- No train_test_split or random_split in the code
-- Train and val counts (expected 4,100 and 878)
-- Best model chosen on validation, not test
+## Confirmed (code and report)
+- Split counts: train 4,100 / val 878 / test 878 in experiment_report.md, matching
+  data/splits.csv. Baseline and fine-tuned test confusion matrices have rows of
+  237 (NORMAL) and 641 (PNEUMONIA), summing to 878.
+- No random splitting: no train_test_split or random_split anywhere in src/.
+  shuffle=True is only on the training loader; validation and test use shuffle=False.
+- Validation-based model selection: train.py (line 425) and finetune.py (line 697)
+  save a checkpoint only when validation loss improves (val_loss < best_val_loss).
+  Test loss is not used for selection.
+- Both scripts read data/splits.csv; every image is converted to RGB and resized to
+  one fixed size in train and eval transforms; no images or weights committed.
 
 ## Caveats
-- A square resize stretches images, and median aspect ratio differs by class
-  (about 1.25 NORMAL vs 1.49 PNEUMONIA), so shape cues may remain.
+- Square resize stretches images; median aspect ratio differs by class.
+- Both models trained for 2 epochs in a single run; improvement is indicative.
 - Results are on a patient-level split and are not comparable with published
   numbers on the original Kaggle split.
