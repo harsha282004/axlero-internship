@@ -1,8 +1,9 @@
 splits.csv sha256: 0eacd0e7ed1e0122ead2110faf708cc27575c9fbfec943da9f2d88ef7e0e2310
-Hash matches recorded value: True
-Counts match README table: True
-Rows: 5856 | duplicate paths: 0
-Patients in >1 split: 0
-Labels present: ['NORMAL', 'PNEUMONIA']
+Rows: 5856
+[PASS] sha256 matches recorded value
+[PASS] counts match README table
+[PASS] no duplicate paths
+[PASS] no patient in more than one split
+[PASS] labels are NORMAL and PNEUMONIA
 RESULT: UNCHANGED
-Checked 2026-10-22; git history: only 92d878b touched splits.csv
+Re-run 2026-10-29 after review; script now path-independent, exits nonzero on failure
