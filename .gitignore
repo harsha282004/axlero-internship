@@ -39,3 +39,5 @@ dist/
 *.log
 *.tmp
 *.temp
+
+/project-1-healthcare/data/
