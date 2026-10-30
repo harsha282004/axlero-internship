@@ -1,0 +1,37 @@
+# Raw dataset (never commit; see data/README.md for the download source and licence)
+chest_xray/
+__MACOSX/
+.DS_Store
+*.zip
+
+# Model artefacts
+checkpoints/
+models/
+runs/
+lightning_logs/
+wandb/
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.h5
+*.keras
+*.safetensors
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python caches and build output
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+# NOTE: data/*.csv, data/README.md, data/eda/*.png and notebooks/*.ipynb are
+# intentionally NOT ignored. Files already tracked by git stay tracked regardless.

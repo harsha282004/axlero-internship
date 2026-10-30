@@ -1,8 +1,27 @@
-numpy
-pandas
-Pillow
-scikit-learn
-matplotlib
-tqdm
-torch
-torchvision
+# Project 1: Healthcare Image Classification
+# Tested locally (read-only check of installed versions) with Python 3.13.
+# Ranges are lower bounds taken from the features the code needs, with an upper
+# bound at the next major version. Nothing here has been installed or upgraded.
+
+# Data pipeline and EDA (scripts/*.py, notebooks/eda.ipynb)
+numpy>=2.0,<3
+pandas>=2.2,<3
+pillow>=10.0,<13
+matplotlib>=3.8,<4
+
+# Notebook execution (eda.ipynb)
+ipykernel>=6.29
+
+# Modelling and evaluation (planned: baseline CNN, DenseNet121 / EfficientNet)
+# torch and torchvision must be a matching pair (e.g. torch 2.10 <-> torchvision 0.25).
+# torch>=2.5 is the first release with Python 3.13 wheels.
+# For a CUDA build, install these two from the PyTorch index for your CUDA version
+# (https://pytorch.org/get-started/locally/), then the rest from this file.
+torch>=2.5,<3
+torchvision>=0.20,<1
+scikit-learn>=1.4,<2   # ROC-AUC, confusion matrix, precision/recall/F1
+tqdm>=4.66,<5          # training progress bars
+
+# Interactive results dashboard (dashboard.py; read-only over runs/, no training)
+streamlit>=1.38,<2
+plotly>=5.24,<6        # dashboard charts; dashboard falls back to matplotlib if absent
