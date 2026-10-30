@@ -1,0 +1,43 @@
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Chest X-ray dataset
+/project-1-healthcare/chest_xray/
+
+# Model checkpoints
+/project-1-healthcare/outputs/checkpoints/
+*.pth
+*.pt
+*.ckpt
+*.h5
+*.keras
+
+# IDE files
+.vscode/
+.idea/
+
+# Jupyter cache
+.ipynb_checkpoints/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+
+/project-1-healthcare/data/
