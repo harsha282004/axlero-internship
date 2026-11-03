@@ -1,5 +1,7 @@
 # Review notes: PR #3 (CNN training and evaluation)
 
+**Scope:** the training code, metrics and results referenced below belong to the Devraj branch (PR #3), not the current `main` branch. File and line references (train.py:425, finetune.py:697) were checked on `origin/Devraj`.
+
 Reviewer: Sri Chidvilas Govindarajula (dataset owner). Date: 2026-10-28.
 
 ## Verified
