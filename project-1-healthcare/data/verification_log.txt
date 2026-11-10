@@ -1,0 +1,9 @@
+splits.csv sha256 (LF-normalised): 5cd9a952286fc4f40415c8fd78d2042f82755f31d74d6c4b90f6ea49d787a16f
+Rows: 5856
+[PASS] schema: required columns and values valid
+[PASS] sha256 matches recorded value
+[PASS] counts match README table
+[PASS] no duplicate paths
+[PASS] no patient in more than one split
+RESULT: UNCHANGED
+Re-run 2026-11-03: hash now LF-normalised (cross-platform); schema validation added

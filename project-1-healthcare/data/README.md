@@ -10,7 +10,7 @@
   Kaggle licence field reads "Other (specified in description)".
 - **Attribution:** Data: Kermany et al., Cell 2018, CC BY 4.0.
 - **Task:** binary classification, NORMAL vs PNEUMONIA
-- **Label mapping used by the team:** NORMAL=0, PNEUMONIA=1
+- **Proposed label mapping:** NORMAL=0, PNEUMONIA=1
 
 ## Label provenance (from the source description)
 Chest X-rays (anterior-posterior) of pediatric patients aged 1-5 from Guangzhou
@@ -58,7 +58,7 @@ Findings are reported, not silently fixed. No files were deleted.
 Patient-level 70/15/15, grouped by patient ID parsed from filenames, with the
 `IM-` and `NORMAL2-IM-` series treated as one group (conservative). Seed 42.
 File: `data/splits.csv` (columns: path, label, subtype, patient_id, orig_split, split).
-sha256 of `splits.csv`: `0eacd0e7ed1e0122ead2110faf708cc27575c9fbfec943da9f2d88ef7e0e2310`
+sha256 of `splits.csv`: `5cd9a952286fc4f40415c8fd78d2042f82755f31d74d6c4b90f6ea49d787a16f`
 (rebuilding from the raw dataset reproduced this hash).
 
 | Split | NORMAL | PNEUMONIA | Total |
@@ -96,3 +96,5 @@ Run from `project-1-healthcare/scripts/`. `inventory.py` ignores `__MACOSX`,
     python eda.py <path to unzipped dataset>
 
 EDA figures are written to `data/eda/`.
+
+Note: the splits.csv sha256 is computed after converting CRLF to LF, so it is identical on Windows, Linux and macOS.
